@@ -62,17 +62,21 @@ def make_model_fn(model, tok, prompt_msgs):
     def model_fn(_prompt: str) -> str:
         msgs = prompt_msgs[call["i"]]
         call["i"] += 1
-        inputs = tok.apply_chat_template(
-            msgs, add_generation_prompt=True, return_tensors="pt"
+        # transformers 5 returns a BatchEncoding (input_ids + attention_mask), not a
+        # bare tensor — pass return_dict=True and unpack with ** so generate() gets
+        # both the ids and the mask (mask also silences the pad-token warning).
+        enc = tok.apply_chat_template(
+            msgs, add_generation_prompt=True, return_tensors="pt", return_dict=True
         ).to(model.device)
+        prompt_len = enc["input_ids"].shape[1]
         with torch.no_grad():
             out = model.generate(
-                inputs,
+                **enc,
                 max_new_tokens=MAX_NEW_TOKENS,
                 do_sample=False,  # greedy: deterministic before/after
                 pad_token_id=tok.pad_token_id,
             )
-        gen = out[0][inputs.shape[1]:]  # only the newly generated tokens
+        gen = out[0][prompt_len:]  # only the newly generated tokens
         return tok.decode(gen, skip_special_tokens=True)
 
     return model_fn
