@@ -34,14 +34,22 @@ def main():
 
     # 2. Install ONLY the libs Kaggle's image lacks. Do NOT upgrade torch /
     #    bitsandbytes / transformers / accelerate: Kaggle ships a torch build
-    #    matched to its GPU (P100, compute 6.0), and `-U` pulls a torch wheel
-    #    with no kernel image for that card ("no kernel image is available").
+    #    matched to its GPU (T4, compute 7.5); `-U` pulls a torch wheel with no
+    #    kernel image for that card ("no kernel image is available").
     #    peft + trl are pure-python and safe to add without touching torch.
-    # Pin trl to a version WITHOUT the chunked-CE LM-head patch, which assumes a
-    # different transformers internal than Kaggle ships and crashes SFTTrainer
-    # init ('functools.partial' has no '__func__'). 0.11.x is stable against
-    # Kaggle's transformers. --no-deps so we don't drag torch off the T4-matched build.
-    sh("pip -q install --no-deps 'peft>=0.12,<0.14' 'trl==0.11.4'")
+    # trl version must MATCH Kaggle's transformers Trainer signature. transformers
+    # >=4.46 renamed the Trainer `tokenizer=` arg to `processing_class=`; trl adopted
+    # that in 0.12. Kaggle ships >=4.46 (0.11.4 crashed: "unexpected keyword
+    # 'tokenizer'"), so we need trl >=0.12 — but past the buggy chunked-CE patch in
+    # 0.12.0/.1 that crashed init ('functools.partial' has no '__func__'). 0.13.0
+    # clears both. --no-deps so we don't drag torch off the T4-matched build.
+    sh("pip -q install --no-deps 'peft>=0.12,<0.14' 'trl==0.13.0'")
+
+    # Print the base versions we're pairing against, so if trl STILL mismatches the
+    # log names the exact transformers/accelerate to target next (no more guessing).
+    sh("python -c \"import transformers,accelerate,trl,peft;"
+       "print('VERSIONS transformers',transformers.__version__,"
+       "'accelerate',accelerate.__version__,'trl',trl.__version__,'peft',peft.__version__)\"")
 
     # 3. build the data splits (from HF), then assert them BEFORE training
     n_train = 2000 if MODE == "full" else 60
