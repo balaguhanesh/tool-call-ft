@@ -43,13 +43,18 @@ def main():
     # 'tokenizer'"), so we need trl >=0.12 — but past the buggy chunked-CE patch in
     # 0.12.0/.1 that crashed init ('functools.partial' has no '__func__'). 0.13.0
     # clears both. --no-deps so we don't drag torch off the T4-matched build.
-    sh("pip -q install --no-deps 'peft>=0.12,<0.14' 'trl==0.13.0'")
+    # bitsandbytes is the CUDA lib that does the 4-bit (nf4) quantization for the
+    # QLoRA rungs (overfit/full). Kaggle's image lacks an importable one; transformers
+    # 5 requires >=0.46.1. It ships as a self-contained CUDA wheel, so --no-deps
+    # installs it without dragging torch off the T4-matched build.
+    sh("pip -q install --no-deps 'peft>=0.12,<0.14' 'trl==0.13.0' 'bitsandbytes>=0.46.1'")
 
-    # Print the base versions we're pairing against, so if trl STILL mismatches the
-    # log names the exact transformers/accelerate to target next (no more guessing).
-    sh("python -c \"import transformers,accelerate,trl,peft;"
+    # Print the base versions we're pairing against, so any remaining mismatch names
+    # the exact library to target next (no more guessing).
+    sh("python -c \"import transformers,accelerate,trl,peft,bitsandbytes;"
        "print('VERSIONS transformers',transformers.__version__,"
-       "'accelerate',accelerate.__version__,'trl',trl.__version__,'peft',peft.__version__)\"")
+       "'accelerate',accelerate.__version__,'trl',trl.__version__,'peft',peft.__version__,"
+       "'bnb',bitsandbytes.__version__)\"")
 
     # 3. build the data splits (from HF), then assert them BEFORE training
     n_train = 2000 if MODE == "full" else 60
