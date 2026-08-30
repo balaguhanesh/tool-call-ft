@@ -54,10 +54,16 @@ def build_model(model_id: str, use_4bit: bool):
             bnb_4bit_compute_dtype=torch.float16,
             bnb_4bit_use_double_quant=True,
         )
+    # Model dtype: for the 4-bit rungs the base is quantized and LoRA adapters stay
+    # fp32, so mixed-precision fp16 (via SFTConfig fp16=True) has an fp32 master to
+    # unscale grads into. But the plumbing rung trains the RAW model (no 4-bit, no
+    # LoRA) — if we also load it in fp16, the params ARE fp16 and the GradScaler
+    # can't unscale them ("Attempting to unscale FP16 gradients"). So load the raw
+    # plumbing model in fp32 and let fp16=True do the mixed-precision autocast.
     model = AutoModelForCausalLM.from_pretrained(
         model_id,
         quantization_config=quant,
-        dtype=torch.float16,
+        dtype=torch.float16 if use_4bit else torch.float32,
         device_map="auto",
     )
     return model, tok
