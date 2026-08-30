@@ -120,14 +120,22 @@ def evaluate(model_fn: Callable[[str], str], examples: list[Example]) -> dict:
     n = len(examples)
     if n == 0:
         raise ValueError("empty eval set")
+    import sys, time
     jv = nc = ac = 0
-    for ex in examples:
+    t0 = time.time()
+    for i, ex in enumerate(examples, 1):
         raw = model_fn(ex.prompt)
         pred = extract_tool_call(raw)
         g = grade_tool_call(pred, ex.gold_name, ex.gold_args)
         jv += int(g.json_valid)
         nc += int(g.name_correct)
         ac += int(g.args_correct)
+        # progress heartbeat so a long unbatched run isn't a blind wait: every 25
+        # examples print done/total + rate + running arg_match, flushed to the log.
+        if i % 25 == 0 or i == n:
+            rate = i / max(time.time() - t0, 1e-9)
+            print(f"  [{i}/{n}] {rate:.1f} ex/s  running arg_match={ac / i:.3f}",
+                  flush=True)
     return {
         "n": n,
         "json_valid": round(jv / n, 4),
