@@ -144,11 +144,17 @@ def train(args):
         print(f"adapter saved -> {args.out_dir}")
 
     # loud check for the overfit rung: did loss actually crater?
+    # The LAST log entry is the train summary (has 'train_loss', no 'loss'), so scan
+    # backwards for the last step that logged a 'loss'.
     if args.mode == "overfit":
-        last = trainer.state.log_history[-1].get("loss")
+        losses = [h["loss"] for h in trainer.state.log_history if "loss" in h]
+        last = losses[-1] if losses else None
         print(f"OVERFIT final loss = {last}")
-        if last is not None and last > 0.5:
-            print("WARNING: loss did not crater on 10 examples — learning may be broken.")
+        if last is None or last > 0.1:
+            # hard-fail so a broken learning signal surfaces as kernel ERROR, not a
+            # silent COMPLETE. On 10 memorized examples loss should reach ~0.01.
+            raise SystemExit(f"OVERFIT FAILED: loss did not crater (last={last}); "
+                             "learning is broken — do NOT run the full rung.")
 
 
 if __name__ == "__main__":

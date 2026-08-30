@@ -16,7 +16,7 @@ import os
 import subprocess
 import sys
 
-MODE = "overfit"  # plumbing -> overfit -> full
+MODE = "full"  # plumbing -> overfit -> full
 REPO = "https://github.com/balaguhanesh/tool-call-ft.git"
 WORK = "/kaggle/working/tool-call-ft"
 
