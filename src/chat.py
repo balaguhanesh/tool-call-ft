@@ -42,12 +42,12 @@ def load(args):
     quant = BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.bfloat16,
+        bnb_4bit_compute_dtype=torch.float16,  # P100 (Pascal) has no bf16
         bnb_4bit_use_double_quant=True,
     )
     tok = AutoTokenizer.from_pretrained(FULL_MODEL)
     model = AutoModelForCausalLM.from_pretrained(
-        FULL_MODEL, quantization_config=quant, torch_dtype=torch.bfloat16, device_map="auto"
+        FULL_MODEL, quantization_config=quant, dtype=torch.float16, device_map="auto"
     )
     if args.adapter:
         from peft import PeftModel

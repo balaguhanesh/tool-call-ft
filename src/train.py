@@ -43,19 +43,21 @@ def build_model(model_id: str, use_4bit: bool):
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
 
+    # Kaggle's GPU is a P100 (Pascal, compute 6.0) — bf16 is unsupported there,
+    # so use fp16 for compute + model dtype.
     quant = None
     if use_4bit:
         # QLoRA: base weights frozen in 4-bit; only LoRA adapters train.
         quant = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.bfloat16,
+            bnb_4bit_compute_dtype=torch.float16,
             bnb_4bit_use_double_quant=True,
         )
     model = AutoModelForCausalLM.from_pretrained(
         model_id,
         quantization_config=quant,
-        torch_dtype=torch.bfloat16,
+        dtype=torch.float16,
         device_map="auto",
     )
     return model, tok
@@ -117,7 +119,7 @@ def train(args):
         logging_steps=5,
         max_steps=max_steps if max_steps else -1,
         num_train_epochs=epochs if epochs else 1,
-        bf16=True,
+        fp16=True,  # P100 (Pascal) supports fp16, not bf16
         save_strategy="epoch" if not plumbing else "no",
         report_to="none",
     )

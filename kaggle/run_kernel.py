@@ -32,9 +32,12 @@ def main():
         sh(f"git clone --depth 1 {REPO} {WORK}")
     os.chdir(WORK)
 
-    # 2. deps Kaggle's base image doesn't pin to what QLoRA needs
-    sh("pip -q install -U 'transformers>=4.44' 'peft>=0.12' 'trl>=0.9' "
-       "'bitsandbytes>=0.43' 'datasets>=2.20' 'accelerate>=0.33'")
+    # 2. Install ONLY the libs Kaggle's image lacks. Do NOT upgrade torch /
+    #    bitsandbytes / transformers / accelerate: Kaggle ships a torch build
+    #    matched to its GPU (P100, compute 6.0), and `-U` pulls a torch wheel
+    #    with no kernel image for that card ("no kernel image is available").
+    #    peft + trl are pure-python and safe to add without touching torch.
+    sh("pip -q install --no-deps 'peft>=0.12' 'trl>=0.9'")
 
     # 3. build the data splits (from HF), then assert them BEFORE training
     n_train = 2000 if MODE == "full" else 60
