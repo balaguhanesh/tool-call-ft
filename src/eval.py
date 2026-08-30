@@ -91,20 +91,28 @@ def grade_tool_call(pred: dict | None, gold_name: str, gold_args: dict) -> Grade
     Given the parsed prediction (or None if it didn't parse) and the gold
     tool name + args, decide the three booleans in GradeResult.
 
-    Design decisions you have to make here — this is the actual work:
-      - `pred` may be None (unparseable). What are the three booleans then?
-      - Where do the function name and args live inside `pred`? Real outputs
-        look like {"name": "...", "arguments": {...}} but the exact keys vary
-        by chat template — decide how forgiving to be.
-      - Argument matching: exact dict equality is brutal (units, "5" vs 5,
-        key ordering, extra optional keys). Decide how strict. Strict is
-        honest but may under-count; loose flatters the model. Pick and justify.
-      - Should a missing/extra argument key fail the whole example, or do you
-        score partial? For a first pass, all-or-nothing is defensible.
+    Rulings for this project (the "strict, honest floor" — loosen later only
+    with justification):
+      - pred is None (unparseable)  -> all three False. If it can't emit JSON,
+        it didn't choose a tool or pass args correctly.
+      - name match  -> exact, case-sensitive. Tool names are code identifiers.
+      - args match  -> exact dict equality (types, keys, values). Brutal but
+        unambiguous; "5" != 5, extra/missing key fails the whole example.
 
-    Return a GradeResult with the three fields set.
+    We read the tool call from pred["name"] and pred["arguments"] (the clean
+    JSON shape our data_prep trains toward). A malformed-but-parsed dict that
+    lacks those keys counts as json_valid but name/args False.
     """
-    raise NotImplementedError("grade_tool_call: implement the grading logic")
+    if pred is None:
+        return GradeResult(json_valid=False, name_correct=False, args_correct=False)
+
+    pred_name = pred.get("name")
+    pred_args = pred.get("arguments", {})
+
+    name_correct = pred_name == gold_name
+    args_correct = pred_args == gold_args
+
+    return GradeResult(json_valid=True, name_correct=name_correct, args_correct=args_correct)
 
 
 def evaluate(model_fn: Callable[[str], str], examples: list[Example]) -> dict:
