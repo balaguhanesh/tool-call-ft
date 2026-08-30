@@ -11,12 +11,27 @@ at /kaggle/input/tool-call-ft/outputs/adapter (set in kernel-metadata via
 kernel_sources). No re-download, no HF push needed.
 """
 
+import glob
 import os
 import subprocess
 
 REPO = "https://github.com/balaguhanesh/tool-call-ft.git"
 WORK = "/kaggle/working/tool-call-ft"
-ADAPTER = "/kaggle/input/tool-call-ft/outputs/adapter"
+
+
+def find_adapter():
+    """Kaggle mounts the source kernel's output under /kaggle/input/<slug>/... but
+    the exact path (and whether the 'outputs/' prefix survives) varies. So don't
+    hard-code it: find the adapter by its config file anywhere under /kaggle/input
+    and return that directory. Prefer the top-level adapter over checkpoint-* dirs."""
+    hits = glob.glob("/kaggle/input/**/adapter_config.json", recursive=True)
+    if not hits:
+        return None
+    # a training run leaves checkpoint-N/ subdirs too; pick the final adapter,
+    # i.e. the shallowest path that is NOT inside a checkpoint-* folder.
+    hits = [h for h in hits if "checkpoint-" not in h] or hits
+    hits.sort(key=lambda p: p.count("/"))
+    return os.path.dirname(hits[0])
 
 
 def sh(cmd: str):
@@ -36,11 +51,15 @@ def main():
     sh("python src/data_prep.py --n-train 60 --n-eval 300")
     sh("python src/check_data.py --path data/eval.jsonl")
 
-    # locate the adapter (mounted kernel source); fail loudly if it's not there
-    if not os.path.isdir(ADAPTER):
-        raise SystemExit(f"adapter not found at {ADAPTER} — check kernel_sources mount")
+    # locate the adapter (mounted kernel source); print what IS under /kaggle/input
+    # so a miss is debuggable, then fail loudly.
+    adapter = find_adapter()
+    if adapter is None:
+        sh("find /kaggle/input -maxdepth 4 -type d | head -50")
+        raise SystemExit("adapter not found under /kaggle/input — check kernel_sources mount")
+    print(f"found adapter -> {adapter}", flush=True)
 
-    sh(f"python src/run_eval.py --eval data/eval.jsonl --adapter {ADAPTER}")
+    sh(f"python src/run_eval.py --eval data/eval.jsonl --adapter {adapter}")
 
     print("\n=== eval complete ===", flush=True)
 
